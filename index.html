@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>内藤体操倶楽部 | Naitō Taisō Club</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" id="theme-color-meta" content="#000000">
+
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -16,14 +25,25 @@
     }
 
     body {
-      background-color: #000;
-      color: #fff;
       font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      transition: background-color 1s ease, color 1s ease;
+    }
+
+    /* ── Night (default) ── */
+    body.night {
+      background-color: #000;
+      color: #fff;
+    }
+
+    /* ── Day ── */
+    body.day {
+      background-color: #fff;
+      color: #000;
     }
 
     main {
@@ -39,6 +59,21 @@
       max-width: 480px;
       height: auto;
       display: block;
+      transition: opacity 0.8s ease;
+    }
+
+    /* ロゴのフェードクロス */
+    .logo-wrap {
+      position: relative;
+      width: min(480px, 85vw);
+    }
+    .logo-wrap img {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: auto;
+    }
+    .logo-wrap img:first-child {
+      position: relative; /* flow用 */
     }
 
     footer {
@@ -46,15 +81,59 @@
       text-align: center;
       font-size: 0.75rem;
       letter-spacing: 0.08em;
-      color: rgba(255, 255, 255, 0.5);
+      transition: color 1s ease;
     }
+    body.night footer { color: rgba(255,255,255,0.45); }
+    body.day  footer { color: rgba(0,0,0,0.45); }
+
+    /* ── デバッグトグルボタン ── */
+    #debug-btn {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 100;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+      border-radius: 999px;
+      cursor: pointer;
+      border: 1px solid currentColor;
+      background: transparent;
+      opacity: 0.35;
+      transition: opacity 0.2s, background 0.3s, color 0.3s;
+      font-family: inherit;
+    }
+    #debug-btn:hover { opacity: 0.85; }
+    body.night #debug-btn { color: #fff; }
+    body.day   #debug-btn { color: #000; }
+
+    /* デバッグ情報 */
+    #debug-info {
+      position: fixed;
+      bottom: 3rem;
+      right: 1rem;
+      z-index: 100;
+      font-size: 0.6rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      text-align: right;
+      pointer-events: none;
+    }
+    #debug-info.visible { opacity: 0.5; }
+    body.night #debug-info { color: #fff; }
+    body.day   #debug-info { color: #000; }
   </style>
 </head>
-<body>
+<body class="night">
 
   <main>
     <div class="logo-wrap">
-      <img src="images/logo-white.png" alt="内藤体操倶楽部 ロゴ">
+      <!-- 白ロゴ（夜用） -->
+      <img id="logo-white" src="images/logo-white.png" alt="内藤体操倶楽部 ロゴ"
+           style="opacity:1;">
+      <!-- 黒ロゴ（昼用） -->
+      <img id="logo-black" src="images/logo-black.png" alt="内藤体操倶楽部 ロゴ"
+           style="opacity:0;">
     </div>
   </main>
 
@@ -62,5 +141,211 @@
     <p>&copy; 2025 株式会社 内藤体操倶楽部</p>
   </footer>
 
+  <!-- デバッグボタン -->
+  <button id="debug-btn" title="昼夜切り替え（デバッグ用）">☀︎ / ☽ debug</button>
+  <div id="debug-info"></div>
+
+  <script>
+    // ──────────────────────────────────────────
+    // 日出・日没計算（東京 35.6762°N, 139.6503°E）
+    // NOAA Solar Calculator アルゴリズム準拠
+    // ──────────────────────────────────────────
+    const TOKYO_LAT = 35.6762;
+    const TOKYO_LNG = 139.6503;
+    const JST_OFFSET = 9; // UTC+9
+
+    function toRad(deg) { return deg * Math.PI / 180; }
+    function toDeg(rad) { return rad * 180 / Math.PI; }
+
+    /**
+     * 指定日の日出・日没を JST の「分（0=0:00）」で返す
+     * @param {Date} date
+     * @returns {{ sunrise: number, sunset: number }} 分単位（JST）
+     */
+    function getSunriseSunset(date) {
+      // Julian Day Number
+      const jd = (date.getTime() / 86400000) + 2440587.5;
+
+      // Julian Century
+      const jc = (jd - 2451545) / 36525;
+
+      // 太陽の幾何学的平均経度 (deg)
+      const L0 = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360;
+      // 太陽の平均近点角 (deg)
+      const M  = 357.52911 + jc * (35999.05029 - 0.0001537 * jc);
+      // 離心率
+      const e  = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+
+      // 太陽の中心差
+      const Mr = toRad(M);
+      const C  = Math.sin(Mr) * (1.914602 - jc * (0.004817 + 0.000014 * jc))
+               + Math.sin(2 * Mr) * (0.019993 - 0.000101 * jc)
+               + Math.sin(3 * Mr) * 0.000289;
+
+      // 太陽の真経度 / 真近点角
+      const sunLon = L0 + C;
+      // const sunAnomaly = M + C;
+
+      // 太陽の見かけ経度
+      const omega = 125.04 - 1934.136 * jc;
+      const lambda = sunLon - 0.00569 - 0.00478 * Math.sin(toRad(omega));
+
+      // 平均黄道傾斜
+      const eps0 = 23 + (26 + (21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813))) / 60) / 60;
+      const epsCor = eps0 + 0.00256 * Math.cos(toRad(omega));
+
+      // 赤緯
+      const dec = toDeg(Math.asin(Math.sin(toRad(epsCor)) * Math.sin(toRad(lambda))));
+
+      // 均時差 (minutes)
+      const y     = Math.tan(toRad(epsCor / 2)) ** 2;
+      const L0r   = toRad(L0);
+      const Mr2   = toRad(M);
+      const eqTime = 4 * toDeg(
+          y * Math.sin(2 * L0r)
+        - 2 * e * Math.sin(Mr2)
+        + 4 * e * y * Math.sin(Mr2) * Math.cos(2 * L0r)
+        - 0.5 * y * y * Math.sin(4 * L0r)
+        - 1.25 * e * e * Math.sin(2 * Mr2)
+      );
+
+      // 時角（地平線 -0.833°, 大気差補正込み）
+      const latR    = toRad(TOKYO_LAT);
+      const decR    = toRad(dec);
+      const haArg   = (Math.cos(toRad(90.833)) / (Math.cos(latR) * Math.cos(decR)))
+                    - Math.tan(latR) * Math.tan(decR);
+
+      if (haArg < -1 || haArg > 1) {
+        // 極夜 / 白夜
+        return haArg < -1 ? { sunrise: 0, sunset: 1440 } : { sunrise: 720, sunset: 720 };
+      }
+
+      const HA = toDeg(Math.acos(haArg)); // degrees
+
+      // 真昼 (UTC minutes)
+      const solarNoonUTC = 720 - 4 * TOKYO_LNG - eqTime;
+      const sunriseUTC   = solarNoonUTC - HA * 4;
+      const sunsetUTC    = solarNoonUTC + HA * 4;
+
+      // JST に変換
+      const toJST = m => ((m + JST_OFFSET * 60) % 1440 + 1440) % 1440;
+
+      return {
+        sunrise: toJST(sunriseUTC),
+        sunset:  toJST(sunsetUTC)
+      };
+    }
+
+    /**
+     * 現在が昼かどうか判定
+     */
+    function isDaytime() {
+      if (manualOverride !== null) return manualOverride;
+      const now   = new Date();
+      const mins  = now.getHours() * 60 + now.getMinutes();
+      const { sunrise, sunset } = getSunriseSunset(now);
+      return mins >= sunrise && mins < sunset;
+    }
+
+    // ──────────────────────────────────────────
+    // テーマ適用
+    // ──────────────────────────────────────────
+    const body       = document.body;
+    const logoWhite  = document.getElementById('logo-white');
+    const logoBlack  = document.getElementById('logo-black');
+    const themeMeta  = document.getElementById('theme-color-meta');
+    const debugBtn   = document.getElementById('debug-btn');
+    const debugInfo  = document.getElementById('debug-info');
+
+    function applyTheme(isDay) {
+      if (isDay) {
+        body.classList.replace('night', 'day') || body.classList.add('day');
+        logoWhite.style.opacity = '0';
+        logoBlack.style.opacity = '1';
+        themeMeta.content = '#ffffff';
+      } else {
+        body.classList.replace('day', 'night') || body.classList.add('night');
+        logoWhite.style.opacity = '1';
+        logoBlack.style.opacity = '0';
+        themeMeta.content = '#000000';
+      }
+    }
+
+    function updateDebugInfo() {
+      const now   = new Date();
+      const { sunrise, sunset } = getSunriseSunset(now);
+      const fmt   = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.floor(m%60)).padStart(2,'0')}`;
+      const mode  = isDaytime() ? '昼（白）' : '夜（黒）';
+      const src   = manualOverride !== null ? '手動' : '自動';
+      debugInfo.textContent =
+        `[${src}] ${mode}\n日出 ${fmt(sunrise)} / 日没 ${fmt(sunset)}\nJST ${now.toLocaleTimeString('ja-JP')}`;
+    }
+
+    // ──────────────────────────────────────────
+    // 自動更新ループ（次の日出/日没に合わせてタイマー）
+    // ──────────────────────────────────────────
+    let manualOverride = null; // null=自動, true=昼強制, false=夜強制
+    let autoTimer = null;
+
+    function scheduleNext() {
+      if (autoTimer) clearTimeout(autoTimer);
+      if (manualOverride !== null) return; // 手動中は自動スケジュールしない
+
+      const now    = new Date();
+      const mins   = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+      const { sunrise, sunset } = getSunriseSunset(now);
+
+      let nextMin;
+      if (mins < sunrise)       nextMin = sunrise;
+      else if (mins < sunset)   nextMin = sunset;
+      else                      nextMin = sunrise + 1440; // 翌日の日出
+
+      const waitMs = (nextMin - mins) * 60 * 1000;
+      autoTimer = setTimeout(() => {
+        if (manualOverride === null) {
+          applyTheme(isDaytime());
+          updateDebugInfo();
+          scheduleNext();
+        }
+      }, waitMs);
+    }
+
+    // ──────────────────────────────────────────
+    // デバッグボタン
+    // ──────────────────────────────────────────
+    let showDebugInfo = false;
+    debugBtn.addEventListener('click', () => {
+      if (manualOverride === null) {
+        // 初回クリック: 現在と逆のモードに切り替え + デバッグ情報表示
+        manualOverride = !isDaytime();
+        showDebugInfo = true;
+      } else if (manualOverride === true) {
+        manualOverride = false;
+      } else {
+        // false → 自動モードに戻す
+        manualOverride = null;
+        showDebugInfo = false;
+        scheduleNext();
+      }
+      applyTheme(isDaytime());
+      if (showDebugInfo) {
+        debugInfo.classList.add('visible');
+        updateDebugInfo();
+      } else {
+        debugInfo.classList.remove('visible');
+      }
+    });
+
+    // ──────────────────────────────────────────
+    // 初期化
+    // ──────────────────────────────────────────
+    applyTheme(isDaytime());
+    scheduleNext();
+
+    // 1分ごとにデバッグ情報を更新（表示中のみ）
+    setInterval(() => {
+      if (showDebugInfo) updateDebugInfo();
+    }, 60000);
+  </script>
 </body>
 </html>
