@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>内藤体操倶楽部 | Naitō Taisō Club</title>
 
   <!-- Favicon -->
@@ -20,8 +20,10 @@
       padding: 0;
     }
 
-    html, body {
+    html {
       height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
     }
 
     body {
@@ -31,6 +33,11 @@
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      min-height: 100dvh;
+      min-height: -webkit-fill-available;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
       transition: background-color 1s ease, color 1s ease;
     }
 
@@ -111,21 +118,7 @@
     body.night #debug-btn { color: #fff; }
     body.day   #debug-btn { color: #000; }
 
-    /* デバッグ情報 */
-    #debug-info {
-      position: fixed;
-      bottom: 3rem;
-      right: 1rem;
-      z-index: 100;
-      font-size: 0.6rem;
-      opacity: 0;
-      transition: opacity 0.3s;
-      text-align: right;
-      pointer-events: none;
-    }
-    #debug-info.visible { opacity: 0.5; }
-    body.night #debug-info { color: #fff; }
-    body.day   #debug-info { color: #000; }
+
   </style>
 </head>
 <body class="night">
@@ -142,12 +135,11 @@
   </main>
 
   <footer>
-    <p>&copy; 2025 株式会社 内藤体操倶楽部</p>
+    <p>&copy; 2026 株式会社内藤体操倶楽部</p>
   </footer>
 
   <!-- 昼夜トグルボタン -->
   <button id="debug-btn" title="昼夜切り替え">◐</button>
-  <div id="debug-info"></div>
 
   <script>
     // ──────────────────────────────────────────
@@ -259,7 +251,6 @@
     const logoBlack  = document.getElementById('logo-black');
     const themeMeta  = document.getElementById('theme-color-meta');
     const debugBtn   = document.getElementById('debug-btn');
-    const debugInfo  = document.getElementById('debug-info');
 
     function applyTheme(isDay) {
       if (isDay) {
@@ -275,16 +266,6 @@
         themeMeta.content = '#000000';
         debugBtn.textContent = '☀︎';
       }
-    }
-
-    function updateDebugInfo() {
-      const now   = new Date();
-      const { sunrise, sunset } = getSunriseSunset(now);
-      const fmt   = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.floor(m%60)).padStart(2,'0')}`;
-      const mode  = isDaytime() ? '昼（白）' : '夜（黒）';
-      const src   = manualOverride !== null ? '手動' : '自動';
-      debugInfo.textContent =
-        `[${src}] ${mode}\n日出 ${fmt(sunrise)} / 日没 ${fmt(sunset)}\nJST ${now.toLocaleTimeString('ja-JP')}`;
     }
 
     // ──────────────────────────────────────────
@@ -310,36 +291,25 @@
       autoTimer = setTimeout(() => {
         if (manualOverride === null) {
           applyTheme(isDaytime());
-          updateDebugInfo();
           scheduleNext();
         }
       }, waitMs);
     }
 
     // ──────────────────────────────────────────
-    // デバッグボタン
+    // トグルボタン
     // ──────────────────────────────────────────
-    let showDebugInfo = false;
     debugBtn.addEventListener('click', () => {
       if (manualOverride === null) {
-        // 初回クリック: 現在と逆のモードに切り替え + デバッグ情報表示
         manualOverride = !isDaytime();
-        showDebugInfo = true;
       } else if (manualOverride === true) {
         manualOverride = false;
       } else {
         // false → 自動モードに戻す
         manualOverride = null;
-        showDebugInfo = false;
         scheduleNext();
       }
       applyTheme(isDaytime());
-      if (showDebugInfo) {
-        debugInfo.classList.add('visible');
-        updateDebugInfo();
-      } else {
-        debugInfo.classList.remove('visible');
-      }
     });
 
     // ──────────────────────────────────────────
@@ -348,10 +318,6 @@
     applyTheme(isDaytime());
     scheduleNext();
 
-    // 1分ごとにデバッグ情報を更新（表示中のみ）
-    setInterval(() => {
-      if (showDebugInfo) updateDebugInfo();
-    }, 60000);
   </script>
 </body>
 </html>
