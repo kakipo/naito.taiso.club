@@ -86,24 +86,28 @@
     body.night footer { color: rgba(255,255,255,0.45); }
     body.day  footer { color: rgba(0,0,0,0.45); }
 
-    /* ── デバッグトグルボタン ── */
+    /* ── 昼夜トグルボタン ── */
     #debug-btn {
       position: fixed;
       bottom: 1rem;
       right: 1rem;
       z-index: 100;
-      padding: 0.4rem 0.75rem;
-      font-size: 0.65rem;
-      letter-spacing: 0.05em;
-      border-radius: 999px;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
       cursor: pointer;
       border: 1px solid currentColor;
       background: transparent;
-      opacity: 0.35;
-      transition: opacity 0.2s, background 0.3s, color 0.3s;
-      font-family: inherit;
+      opacity: 0.25;
+      transition: opacity 0.2s, color 0.3s;
+      font-size: 0.85rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
-    #debug-btn:hover { opacity: 0.85; }
+    #debug-btn:hover { opacity: 0.7; }
     body.night #debug-btn { color: #fff; }
     body.day   #debug-btn { color: #000; }
 
@@ -141,8 +145,8 @@
     <p>&copy; 2025 株式会社 内藤体操倶楽部</p>
   </footer>
 
-  <!-- デバッグボタン -->
-  <button id="debug-btn" title="昼夜切り替え（デバッグ用）">☀︎ / ☽ debug</button>
+  <!-- 昼夜トグルボタン -->
+  <button id="debug-btn" title="昼夜切り替え">◐</button>
   <div id="debug-info"></div>
 
   <script>
@@ -263,11 +267,13 @@
         logoWhite.style.opacity = '0';
         logoBlack.style.opacity = '1';
         themeMeta.content = '#ffffff';
+        debugBtn.textContent = '☽';
       } else {
         body.classList.replace('day', 'night') || body.classList.add('night');
         logoWhite.style.opacity = '1';
         logoBlack.style.opacity = '0';
         themeMeta.content = '#000000';
+        debugBtn.textContent = '☀︎';
       }
     }
 
